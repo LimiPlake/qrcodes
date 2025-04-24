@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>QR Code Generator (URL or Code)</title>
+  <style>
+    body {
+      text-align: center;
+      font-family: sans-serif;
+      padding: 20px;
+    }
+    input, button, select, textarea {
+      padding: 10px;
+      font-size: 16px;
+      margin: 10px;
+    }
+    canvas {
+      margin-top: 20px;
+      border: 1px solid #ddd;
+    }
+  </style>
+</head>
+<body>
+  <h1>QR Code Generator</h1>
+
+  <label>Type:
+    <select id="mode">
+      <option value="url">URL</option>
+      <option value="code">Code (HTML)</option>
+    </select>
+  </label>
+  <br>
+
+  <textarea id="text" rows="4" cols="40" placeholder="Enter URL or HTML code..."></textarea>
+  <br>
+
+  <input type="file" id="upload" accept="image/*" />
+  <br>
+
+  <label>QR Size:
+    <select id="size">
+      <option value="200">200x200</option>
+      <option value="300">300x300</option>
+      <option value="400">400x400</option>
+    </select>
+  </label>
+  <br>
+
+  <label>Gradient Top Color: <input type="color" id="color1" value="#ff0000"></label>
+  <label>Gradient Bottom Color: <input type="color" id="color2" value="#0000ff"></label>
+  <br>
+
+  <button onclick="makeCode()">Generate QR</button>
+  <button onclick="downloadQR()">Download QR</button>
+
+  <div id="qrcode" style="display:none;"></div>
+  <canvas id="finalCanvas"></canvas>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script>
+    let uploadedLogo = null;
+
+    document.getElementById("upload").addEventListener("change", function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        uploadedLogo = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    function makeCode() {
+      const type = document.getElementById("mode").value;
+      const input = document.getElementById("text").value.trim();
+      const size = parseInt(document.getElementById("size").value);
+      const colorTop = document.getElementById("color1").value;
+      const colorBottom = document.getElementById("color2").value;
+
+      if (!input) {
+        alert("Please enter something!");
+        return;
+      }
+
+      const data = (type === "url") ? input : btoa(input); // encode HTML as base64 for 'code'
+
+      const qrcodeDiv = document.getElementById("qrcode");
+      const canvas = document.getElementById("finalCanvas");
+      canvas.width = size;
+      canvas.height = size;
+
+      qrcodeDiv.innerHTML = "";
+      new QRCode(qrcodeDiv, {
+        text: data,
+        width: size,
+        height: size,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+      });
+
+      setTimeout(() => {
+        const qrImg = qrcodeDiv.querySelector("img");
+        const ctx = canvas.getContext("2d");
+
+        const baseImage = new Image();
+        baseImage.onload = function () {
+          ctx.clearRect(0, 0, size, size);
+
+          const gradient = ctx.createLinearGradient(0, 0, 0, size);
+          gradient.addColorStop(0, colorTop);
+          gradient.addColorStop(1, colorBottom);
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, size, size);
+
+          const maskCanvas = document.createElement("canvas");
+          maskCanvas.width = size;
+          maskCanvas.height = size;
+          const maskCtx = maskCanvas.getContext("2d");
+
+          maskCtx.drawImage(baseImage, 0, 0, size, size);
+          const maskData = maskCtx.getImageData(0, 0, size, size);
+
+          const imageData = ctx.getImageData(0, 0, size, size);
+          for (let i = 0; i < imageData.data.length; i += 4) {
+            const r = maskData.data[i];
+            if (r > 100) {
+              imageData.data[i + 3] = 0;
+            }
+          }
+          ctx.putImageData(imageData, 0, 0);
+
+          if (uploadedLogo) {
+            const logo = new Image();
+            logo.onload = function () {
+              const logoSize = size * 0.25;
+              const logoX = (size - logoSize) / 2;
+              const logoY = (size - logoSize) / 2;
+              ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+            };
+            logo.src = uploadedLogo;
+          }
+        };
+        baseImage.src = qrImg.src;
+      }, 300);
+    }
+
+    function downloadQR() {
+      const canvas = document.getElementById("finalCanvas");
+      const link = document.createElement("a");
+      link.download = "qr-code.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    }
+  </script>
+</body>
+</html>
